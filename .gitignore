@@ -1,0 +1,32 @@
+## .NET / C#
+bin/
+obj/
+*.user
+*.suo
+*.vs/
+.vs/
+*.swp
+*.sln.docstates
+
+## Publish output
+publish/
+out/
+
+## NuGet
+*.nupkg
+*.snupkg
+.nuget/
+
+## Rider
+.idea/
+
+## VS Code
+.vscode/
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Secrets - never commit
+appsettings.Production.json
+secrets.json
