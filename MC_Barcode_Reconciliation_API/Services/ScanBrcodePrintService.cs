@@ -92,6 +92,53 @@ public class ScanBrcodePrintService : IScanBrcodePrintService
         return await _context.ScanBrcodePrints.AnyAsync(x => x.RandomCode == randomCode);
     }
 
+    public async Task<IEnumerable<ScanBrcodePrintDto>> GetByLoadingIdAsync(string laodingId)
+    {
+        if (string.IsNullOrWhiteSpace(laodingId))
+            return Enumerable.Empty<ScanBrcodePrintDto>();
+
+        var entities = await _context.ScanBrcodePrints
+            .Where(x => x.LoadingId == laodingId)
+            .OrderByDescending(x => x.ProdDate)
+            .ToListAsync();
+
+        return entities.Select(MapToDto).ToList();
+    }
+
+    public async Task<IEnumerable<ScanBrcodePrintDto>> UpdateByLoadingIdAsync(string laodingId, BulkUpdateScanBrcodePrintDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(laodingId))
+            return Enumerable.Empty<ScanBrcodePrintDto>();
+
+        var entities = await _context.ScanBrcodePrints
+            .Where(x => x.LoadingId == laodingId)
+            .ToListAsync();
+
+        if (entities.Count == 0)
+            return Enumerable.Empty<ScanBrcodePrintDto>();
+
+        foreach (var entity in entities)
+        {
+            entity.SITE = dto.SITE ?? entity.SITE;
+            entity.Barcode = dto.Barcode ?? entity.Barcode;
+            entity.ProdShift = dto.ProdShift ?? entity.ProdShift;
+            entity.Description = dto.Description ?? entity.Description;
+            entity.Machine = dto.Machine ?? entity.Machine;
+            entity.ShopOrder = dto.ShopOrder ?? entity.ShopOrder;
+            entity.DopId = dto.DopId ?? entity.DopId;
+            entity.EpfNo = dto.EpfNo ?? entity.EpfNo;
+            entity.PrintedQty = dto.PrintedQty ?? entity.PrintedQty;
+            entity.PrintedDate = dto.PrintedDate ?? entity.PrintedDate;
+            entity.ScnQty = dto.ScnQty ?? entity.ScnQty;
+            entity.ScanDate = dto.ScanDate ?? entity.ScanDate;
+            entity.PartNo = dto.PartNo ?? entity.PartNo;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return entities.Select(MapToDto).ToList();
+    }
+
     private static ScanBrcodePrintDto MapToDto(ScanBrcodePrint entity) => new()
     {
         RandomCode = entity.RandomCode,
