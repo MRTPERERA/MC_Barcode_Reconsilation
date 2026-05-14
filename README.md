@@ -19,6 +19,8 @@ A **.NET 8 Web API** for reading and updating barcode print/scan reconciliation 
   - [GET /api/ScanBarcodePrint](#get-apiscanbarcode)
   - [GET /api/ScanBarcodePrint/{randomCode}](#get-apiscanbarcodeprint-randomcode)
   - [PUT /api/ScanBarcodePrint/{randomCode}](#put-apiscanbarcodeprint-randomcode)
+  - [GET /api/ScanBarcodePrint/loading/{laodingId}](#get-apiscanbarcodeprint-loadinglaodingid)
+  - [PUT /api/ScanBarcodePrint/loading/{laodingId}](#put-apiscanbarcodeprint-loadinglaodingid)
 - [Request & Response Shapes](#request--response-shapes)
 - [Filter Parameters](#filter-parameters)
 - [Setup & Configuration](#setup--configuration)
@@ -37,6 +39,8 @@ This API provides a clean REST interface over the `[dbo].[ScanBrcodePrint]` tabl
 - **Reading** all barcode print records with filtering and pagination
 - **Reading** a single record by its unique `RandomCode`
 - **Updating** any fields on a record (null-safe partial update — only fields you send are changed)
+- **Reading** all records in a loading batch by `LaodingID`
+- **Batch updating** all records in a loading batch (null-safe, applied to all matching records)
 
 ---
 
@@ -117,7 +121,8 @@ MC_Barcode_Reconsilation/
     │
     ├── DTOs/
     │   ├── ScanBrcodePrintDto.cs               # Read response shape
-    │   ├── UpdateScanBrcodePrintDto.cs         # PUT request body
+    │   ├── UpdateScanBrcodePrintDto.cs         # PUT request body (single record)
+    │   ├── BulkUpdateScanBrcodePrintDto.cs     # PUT request body (batch by LaodingID)
     │   └── ScanBrcodePrintFilterDto.cs         # GET query string filters
     │
     └── Services/
@@ -313,6 +318,108 @@ Content-Type: application/json
 
 ---
 
+### GET /api/ScanBarcodePrint/loading/{laodingId}
+
+Returns all records in a specific loading batch, identified by `LaodingID`.
+
+**Request**
+```
+GET /api/ScanBarcodePrint/loading/20260426001
+```
+
+**Response — 200 OK**
+```json
+[
+  {
+    "randomCode": "202604261148391000",
+    "serialNo": 1,
+    "barcode": "202604261148391000",
+    "site": "B15",
+    "prodDate": "2026-04-26T11:10:40.053",
+    "prodShift": "DAY",
+    "partNo": "843",
+    "description": "843",
+    "machine": "M1",
+    "shopOrder": "SO0001",
+    "dopId": "D01",
+    "epfNo": "001234",
+    "printedQty": 1,
+    "printedDate": "2026-04-26T11:10:40.053",
+    "scnQty": 1,
+    "scanDate": "2026-04-26T11:10:40.053",
+    "loadingId": "20260426001"
+  },
+  {
+    "randomCode": "202604261149392000",
+    "serialNo": 2,
+    ...
+    "loadingId": "20260426001"
+  }
+]
+```
+
+**Response — 404 Not Found** — if no records exist for that loading ID
+```json
+{ "message": "No records found for LaodingID '20260426001'." }
+```
+
+---
+
+### PUT /api/ScanBarcodePrint/loading/{laodingId}
+
+Updates **all records** in a specific loading batch. **Only fields included in the request body are updated** — omitted fields keep their existing values (null-safe, applied to all matching records).
+
+**Request**
+```
+PUT /api/ScanBarcodePrint/loading/20260426001
+Content-Type: application/json
+
+{
+  "scnQty": 50,
+  "scanDate": "2026-04-26T14:30:00.000",
+  "epfNo": "001234"
+}
+```
+
+**Response — 200 OK** — returns summary + list of all updated records
+```json
+{
+  "laodingId": "20260426001",
+  "recordsUpdated": 2,
+  "records": [
+    {
+      "randomCode": "202604261148391000",
+      "serialNo": 1,
+      "barcode": "202604261148391000",
+      "site": "B15",
+      "scnQty": 50,
+      "scanDate": "2026-04-26T14:30:00.000",
+      "epfNo": "001234",
+      ...
+      "loadingId": "20260426001"
+    },
+    {
+      "randomCode": "202604261149392000",
+      "serialNo": 2,
+      "scnQty": 50,
+      "scanDate": "2026-04-26T14:30:00.000",
+      "epfNo": "001234",
+      ...
+      "loadingId": "20260426001"
+    }
+  ]
+}
+```
+
+**Response — 404 Not Found** — if no records exist for that loading ID
+```json
+{ "message": "No records found for LaodingID '20260426001'." }
+```
+
+**Response — 400 Bad Request** — returned if model validation fails.
+
+---
+
 ## Request & Response Shapes
 
 ### ScanBrcodePrintDto (read response)
@@ -337,9 +444,29 @@ Content-Type: application/json
 | `scanDate` | `DateTime?` | ISO 8601 with ms |
 | `loadingId` | `string?` | format: `yyyyMMdd` + 3-digit counter |
 
-### UpdateScanBrcodePrintDto (PUT request body)
+### UpdateScanBrcodePrintDto (PUT request body for single record)
 
 Same fields as above **except `randomCode`** (that comes from the URL). All fields are optional — send only what you want to change.
+
+### BulkUpdateScanBrcodePrintDto (PUT request body for batch update)
+
+Used with `PUT /api/ScanBarcodePrint/loading/{laodingId}` to update multiple records in a loading batch. All fields are optional.
+
+| Field | Type | Notes |
+|---|---|---|
+| `site` | `string?` | |
+| `barcode` | `string?` | |
+| `prodShift` | `string?` | |
+| `description` | `string?` | |
+| `machine` | `string?` | |
+| `shopOrder` | `string?` | |
+| `dopId` | `string?` | |
+| `epfNo` | `string?` | 6-digit zero-padded, e.g. `001234` |
+| `printedQty` | `int?` | |
+| `printedDate` | `DateTime?` | ISO 8601 with ms |
+| `scnQty` | `int?` | |
+| `scanDate` | `DateTime?` | ISO 8601 with ms |
+| `partNo` | `string?` | |
 
 ---
 
@@ -425,7 +552,12 @@ Swagger UI is available at the **root URL** when the app is running:
 http://localhost:5000/
 ```
 
-All three endpoints are listed with full request/response schemas and a "Try it out" button for live testing.
+All five endpoints are listed with full request/response schemas and a "Try it out" button for live testing:
+1. GET all records (with filters + pagination)
+2. GET single record by RandomCode
+3. PUT single record by RandomCode
+4. GET all records by LaodingID (batch)
+5. PUT all records by LaodingID (batch)
 
 ---
 
@@ -495,7 +627,7 @@ Controller returns 200 OK with full updated record JSON
 | **Service** | `ScanBrcodePrintService` | Business logic, filtering, pagination, update merging, mapping |
 | **DbContext** | `AppDbContext` | EF Core configuration, column name mapping, DB connection |
 | **Model** | `ScanBrcodePrint` | Entity class mirroring the DB table |
-| **DTOs** | `ScanBrcodePrintDto`, `UpdateScanBrcodePrintDto`, `ScanBrcodePrintFilterDto` | API contract shapes — separate from DB model |
+| **DTOs** | `ScanBrcodePrintDto`, `UpdateScanBrcodePrintDto`, `BulkUpdateScanBrcodePrintDto`, `ScanBrcodePrintFilterDto` | API contract shapes — separate from DB model |
 
 ---
 

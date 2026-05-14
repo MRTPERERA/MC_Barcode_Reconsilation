@@ -60,4 +60,45 @@ public class ScanBarcodePrintController : ControllerBase
 
         return Ok(updated);
     }
+
+    /// <summary>
+    /// Get all ScanBrcodePrint records for a specific LaodingID (loading batch).
+    /// </summary>
+    [HttpGet("loading/{laodingId}")]
+    [ProducesResponseType(typeof(IEnumerable<ScanBrcodePrintDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetByLoadingId(string laodingId)
+    {
+        var records = await _service.GetByLoadingIdAsync(laodingId);
+
+        if (!records.Any())
+            return NotFound(new { message = $"No records found for LaodingID '{laodingId}'." });
+
+        return Ok(records);
+    }
+
+    /// <summary>
+    /// Update all ScanBrcodePrint records for a specific LaodingID. Only provided fields are updated across all records.
+    /// </summary>
+    [HttpPut("loading/{laodingId}")]
+    [ProducesResponseType(typeof(IEnumerable<ScanBrcodePrintDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateByLoadingId(string laodingId, [FromBody] BulkUpdateScanBrcodePrintDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var updated = await _service.UpdateByLoadingIdAsync(laodingId, dto);
+
+        if (!updated.Any())
+            return NotFound(new { message = $"No records found for LaodingID '{laodingId}'." });
+
+        return Ok(new
+        {
+            laodingId = laodingId,
+            recordsUpdated = updated.Count(),
+            records = updated
+        });
+    }
 }
