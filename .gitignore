@@ -30,3 +30,25 @@ Thumbs.db
 ## Secrets - never commit
 appsettings.Production.json
 secrets.json
+
+## Android/Gradle
+.gradle/
+.idea/
+*.iml
+.settings/
+build/
+dist/
+*.apk
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+local.properties
+.classpath
+.project
+.cproject
+.metadata
+.DS_Store
+*.swp
+*~.nib
