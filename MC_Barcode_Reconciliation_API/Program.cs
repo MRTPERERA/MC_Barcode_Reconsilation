@@ -25,6 +25,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<IScanBrcodePrintService, ScanBrcodePrintService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IScanningService, ScanningService>();
 
 builder.Services.AddCors(options =>
 {
