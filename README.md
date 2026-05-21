@@ -1,6 +1,6 @@
 # MC Barcode Reconciliation API
 
-A **.NET 8 Web API** for reading and updating barcode print/scan reconciliation data in the `Inventry_System_Sri` SQL Server database.
+A **.NET 8 Web API** for user authentication and barcode print/scan reconciliation operations in the `Inventry_System_Sri` SQL Server database.
 
 ---
 
@@ -15,6 +15,10 @@ A **.NET 8 Web API** for reading and updating barcode print/scan reconciliation 
   - [Key & Index](#key--index)
   - [RandomCode Format](#randomcode-format)
   - [LoadingID Format](#loadingid-format)
+- [Authentication](#authentication)
+  - [POST /api/auth/login](#post-apiauthlogin)
+  - [GET /api/auth/user/{userId}](#get-apiauthuser-userid)
+  - [POST /api/auth/validate](#post-apiauthvalidate)
 - [API Endpoints](#api-endpoints)
   - [GET /api/ScanBarcodePrint](#get-apiscanbarcode)
   - [GET /api/ScanBarcodePrint/{randomCode}](#get-apiscanbarcodeprint-randomcode)
@@ -34,8 +38,14 @@ A **.NET 8 Web API** for reading and updating barcode print/scan reconciliation 
 
 ## Overview
 
-This API provides a clean REST interface over the `[dbo].[ScanBrcodePrint]` table in the `Inventry_System_Sri` SQL Server database. It supports:
+This API provides a clean REST interface for user authentication and barcode operations over two main tables in the `Inventry_System_Sri` SQL Server database:
 
+**Authentication (User_Account table):**
+- User login with credential validation
+- User profile lookup by ID
+- Credential validation endpoint
+
+**Barcode Reconciliation (ScanBrcodePrint table):**
 - **Reading** all barcode print records with filtering and pagination
 - **Reading** a single record by its unique `RandomCode`
 - **Updating** any fields on a record (null-safe partial update — only fields you send are changed)
@@ -201,7 +211,153 @@ Counter resets to `001` each day.
 
 ---
 
-## API Endpoints
+## Authentication
+
+The API uses the `[dbo].[User_Account]` table for user authentication. All users must authenticate before accessing barcode reconciliation endpoints (in a production deployment, you would add JWT token validation to protected endpoints).
+
+### User_Account Table
+
+| Column | C# Property | Type | Description |
+|---|---|---|---|
+| `USERID` | `UserId` | `varchar(50)` | Unique username — primary key |
+| `PASSWORD` | `Password` | `varchar(50)` | Plain-text password (see security note below) |
+| `LEVEL` | `Level` | `varchar(10)` | User permission level (e.g. `user`, `extd`, `admin`) |
+| `SITE` | `Site` | `varchar(3)` | Site code (e.g. `RPW`, `TUB`, `EXE`) |
+| `SystemName` | `SystemName` | `varchar(900)` | System/module name |
+| `DEFAULT_LOCATION` | `DefaultLocation` | `varchar(50)` | Default location code |
+| `PLANT_LOC` | `PlantLoc` | `varchar(50)` | Plant location |
+| `IFS_SITE` | `IfsSite` | `varchar(50)` | IFS site identifier |
+| `IFS_SITE_NAME` | `IfsSiteName` | `varchar(50)` | IFS site name |
+| `RecevingCat` | `RecevingCat` | `varchar(50)` | Receiving category |
+
+### POST /api/auth/login
+
+Authenticate user with UserId and Password. Returns full user profile on success.
+
+**Request**
+```
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "userId": "rpw",
+  "password": "123"
+}
+```
+
+**Response — 200 OK**
+```json
+{
+  "success": true,
+  "message": "Login successful.",
+  "user": {
+    "userId": "rpw",
+    "level": "user",
+    "site": "RPW",
+    "systemName": "Press Barcode Scan MC",
+    "defaultLocation": "2MGRDF",
+    "plantLoc": "RMCPR",
+    "ifsSite": "2",
+    "ifsSiteName": "SRI",
+    "recevingCat": null
+  }
+}
+```
+
+**Response — 401 Unauthorized** — if password is incorrect
+```json
+{
+  "success": false,
+  "message": "Invalid password.",
+  "user": null
+}
+```
+
+**Response — 404 Not Found** — if user doesn't exist
+```json
+{
+  "success": false,
+  "message": "User 'unknown' not found.",
+  "user": null
+}
+```
+
+**Response — 400 Bad Request** — if UserId or Password is missing
+```json
+{
+  "success": false,
+  "message": "UserId and Password are required.",
+  "user": null
+}
+```
+
+---
+
+### GET /api/auth/user/{userId}
+
+Retrieve user profile by UserId (without password validation).
+
+**Request**
+```
+GET /api/auth/user/rpw
+```
+
+**Response — 200 OK**
+```json
+{
+  "userId": "rpw",
+  "level": "user",
+  "site": "RPW",
+  "systemName": "Press Barcode Scan MC",
+  "defaultLocation": "2MGRDF",
+  "plantLoc": "RMCPR",
+  "ifsSite": "2",
+  "ifsSiteName": "SRI",
+  "recevingCat": null
+}
+```
+
+**Response — 404 Not Found** — if user doesn't exist
+```json
+{ "message": "User 'unknown' not found." }
+```
+
+---
+
+### POST /api/auth/validate
+
+Validate credentials without returning user profile. Returns `true`/`false`.
+
+**Request**
+```
+POST /api/auth/validate
+Content-Type: application/json
+
+{
+  "userId": "rpw",
+  "password": "123"
+}
+```
+
+**Response — 200 OK**
+```json
+{
+  "isValid": true,
+  "message": "Credentials are valid."
+}
+```
+
+**Response — 200 OK** (invalid credentials)
+```json
+{
+  "isValid": false,
+  "message": "Invalid credentials."
+}
+```
+
+---
+
+## Barcode Reconciliation API Endpoints
 
 Base URL: `http://localhost:5000/api/ScanBarcodePrint`
 
@@ -552,12 +708,19 @@ Swagger UI is available at the **root URL** when the app is running:
 http://localhost:5000/
 ```
 
-All five endpoints are listed with full request/response schemas and a "Try it out" button for live testing:
-1. GET all records (with filters + pagination)
-2. GET single record by RandomCode
-3. PUT single record by RandomCode
-4. GET all records by LaodingID (batch)
-5. PUT all records by LaodingID (batch)
+All **8 endpoints** are listed with full request/response schemas and a "Try it out" button for live testing:
+
+**Authentication (3 endpoints):**
+1. POST login (authenticate with UserId + Password)
+2. GET user/{userId} (fetch user profile)
+3. POST validate (check credentials)
+
+**Barcode Reconciliation (5 endpoints):**
+4. GET all records (with filters + pagination)
+5. GET single record by RandomCode
+6. PUT single record by RandomCode
+7. GET all records by LaodingID (batch)
+8. PUT all records by LaodingID (batch)
 
 ---
 
@@ -622,12 +785,17 @@ Controller returns 200 OK with full updated record JSON
 
 | Layer | Class | Responsibility |
 |---|---|---|
-| **Controller** | `ScanBarcodePrintController` | HTTP routing, model validation, response codes |
-| **Service Interface** | `IScanBrcodePrintService` | Contract — decouples controller from implementation |
-| **Service** | `ScanBrcodePrintService` | Business logic, filtering, pagination, update merging, mapping |
-| **DbContext** | `AppDbContext` | EF Core configuration, column name mapping, DB connection |
-| **Model** | `ScanBrcodePrint` | Entity class mirroring the DB table |
-| **DTOs** | `ScanBrcodePrintDto`, `UpdateScanBrcodePrintDto`, `BulkUpdateScanBrcodePrintDto`, `ScanBrcodePrintFilterDto` | API contract shapes — separate from DB model |
+| **Controller** | `ScanBarcodePrintController` | HTTP routing, model validation, response codes for barcode operations |
+| **Controller** | `AuthController` | HTTP routing, login endpoint, user lookup, credential validation |
+| **Service Interface** | `IScanBrcodePrintService` | Contract — decouples barcode controller from implementation |
+| **Service Interface** | `IAuthService` | Contract — decouples auth controller from implementation |
+| **Service** | `ScanBrcodePrintService` | Business logic, filtering, pagination, update merging, DTO mapping |
+| **Service** | `AuthService` | User authentication, credential validation, password comparison |
+| **DbContext** | `AppDbContext` | EF Core configuration, column name mapping for both tables |
+| **Model** | `ScanBrcodePrint` | Entity class mirroring the `[dbo].[ScanBrcodePrint]` table |
+| **Model** | `UserAccount` | Entity class mirroring the `[dbo].[User_Account]` table |
+| **DTOs** | `ScanBrcodePrintDto`, `UpdateScanBrcodePrintDto`, `BulkUpdateScanBrcodePrintDto`, `ScanBrcodePrintFilterDto` | Barcode API contract shapes |
+| **DTOs** | `LoginRequestDto`, `LoginResponseDto`, `UserInfoDto` | Authentication API contract shapes |
 
 ---
 
@@ -644,3 +812,63 @@ The following issues exist in the original database schema and are documented he
 | No primary key | No `PRIMARY KEY` constraint — `RandomCode` unique index acts as identifier |
 | All columns nullable | No `NOT NULL` constraints — the application must enforce data completeness |
 | Excel precision loss | 18-digit `RandomCode` exceeds Excel float precision (15 digits) — safe in DB as `varchar` |
+
+---
+
+## ⚠️ Security Notes
+
+### Password Handling
+
+**Current Implementation:**
+- Passwords in the `User_Account` table are stored in **plain text** and compared with case-sensitive string equality.
+- This is **NOT SECURE** for production environments.
+
+**Recommended for Production:**
+1. **Hash passwords** using bcrypt, PBKDF2, or Argon2 before storing in the database.
+2. **Never store plain-text passwords** — hash them during registration and re-hash during login to compare.
+3. **Add JWT token generation** — return a signed JWT on successful login instead of exposing user details.
+4. **Implement rate limiting** on login endpoint to prevent brute-force attacks.
+5. **Use HTTPS only** — enforce TLS/SSL for all authentication endpoints.
+6. **Add password salt** — use unique salt per user (included in bcrypt/PBKDF2 by default).
+
+**Example bcrypt implementation in C#:**
+```csharp
+// During registration
+var hash = BCrypt.Net.BCrypt.HashPassword(plainTextPassword);
+user.Password = hash;  // Store hash
+
+// During login
+if (BCrypt.Net.BCrypt.Verify(plainTextPassword, user.Password))
+{
+    // Credentials are valid
+}
+```
+
+### API Authorization
+
+Currently, authentication endpoints are **public** (no JWT validation). For production:
+1. Add JWT bearer token validation to protected endpoints.
+2. Check user `Level` (permission level) before allowing certain operations.
+3. Implement role-based access control (RBAC) if needed.
+
+Example (would need additional middleware setup):
+```csharp
+[Authorize(Roles = "admin,user")]
+[HttpGet("/api/ScanBarcodePrint")]
+public async Task<IActionResult> GetAll([FromQuery] ScanBrcodePrintFilterDto filter)
+{
+    // Protected endpoint
+}
+```
+
+### Recommendations Summary
+
+| Item | Current | Recommended |
+|---|---|---|
+| Password storage | Plain text | Bcrypt/PBKDF2 hash |
+| Authentication | Simple credential check | JWT tokens + refresh tokens |
+| Password comparison | String equality | Secure hash comparison |
+| HTTPS | Optional | Enforced |
+| Rate limiting | None | Implement on `/api/auth/login` |
+| Audit logging | None | Log failed login attempts |
+
