@@ -12,7 +12,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "MC Barcode Reconciliation API",
         Version = "v1",
-        Description = "API for reading and updating ScanBrcodePrint barcode reconciliation data."
+        Description = "API for user authentication and barcode print/scan reconciliation operations."
     });
     var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
@@ -24,6 +24,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<IScanBrcodePrintService, ScanBrcodePrintService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IScanningService, ScanningService>();
 
 builder.Services.AddCors(options =>
 {
